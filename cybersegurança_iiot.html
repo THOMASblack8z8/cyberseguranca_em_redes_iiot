@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IIoT - Cybersegurança Industrial</title>
+    <style>
+        /* Definimos as cores principais aqui para facilitar se quisermos mudar o tema depois */
+        :root {
+            --primary: #00ff9d;   /* Verde neon para estado OK */
+            --danger: #ff3e3e;    /* Vermelho para alertas de invasão */
+            --warning: #ffbe0b;   /* Amarelo para avisos do sistema */
+            --bg-dark: #05070a;   /* Fundo quase preto, estilo terminal */
+            --card-bg: rgba(255, 255, 255, 0.03); /* Efeito de vidro (Glassmorphism) */
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-dark);
+            /* Gradientes no fundo para dar aquela cara de monitor de ficção científica */
+            background-image: 
+                radial-gradient(circle at 50% 0%, #1a2a3a 0%, transparent 50%),
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            color: #e0e0e0;
+            padding: 40px 20px;
+        }
+
+        .container { max-width: 1300px; margin: 0 auto; }
+
+        /* Estilo do título principal */
+        .header {
+            margin-bottom: 40px;
+            border-left: 5px solid var(--primary);
+            padding-left: 20px;
+        }
+
+        /* Banner de Status Global - muda de cor se houver ataque */
+        .global-status {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Animação que faz o dashboard "pulsar" em vermelho durante uma invasão */
+        .global-status.attack { 
+            border-bottom: 4px solid var(--danger);
+            animation: pulse-danger 1.5s infinite;
+        }
+
+        @keyframes pulse-danger {
+            0% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(255, 62, 62, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); }
+        }
+
+        /* Grid que organiza os 3 cards de máquinas */
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .device {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 25px;
+            transition: transform 0.3s ease;
+        }
+
+        .device:hover { transform: translateY(-5px); }
+
+        /* Números grandes dos sensores */
+        .sensor-reading {
+            font-size: 48px;
+            font-weight: 800;
+            text-align: center;
+            margin: 20px 0;
+            color: #fff;
+        }
+
+        /* Barra de progresso visual do sensor */
+        .sensor-bar-container {
+            background: rgba(0,0,0,0.3);
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .sensor-bar-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        /* Painel de botões para simular os ataques */
+        .controls-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .btn-group { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px; }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            border: none;
+            font-size: 11px;
+        }
+
+        .btn-attack { background: rgba(255, 62, 62, 0.1); color: var(--danger); border: 1px solid var(--danger); }
+        .btn-attack:hover { background: var(--danger); color: #fff; }
+
+        .btn-recover { background: rgba(0, 255, 157, 0.1); color: var(--primary); border: 1px solid var(--primary); }
+        .btn-recover:hover { background: var(--primary); color: #000; }
+
+        /* Console de texto (Log de eventos) */
+        .history-panel {
+            background: #000;
+            border-radius: 12px;
+            padding: 20px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-card {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .stat-value { font-size: 24px; font-weight: bold; color: var(--primary); }
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; }
+        .status-normal { background: rgba(0, 255, 157, 0.1); color: var(--primary); }
+        .status-alert { background: rgba(255, 62, 62, 0.1); color: var(--danger); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>IIoT - Cybersegurança</h1>
+        <p>Monitoramento de Integridade Industrial em Tempo Real</p>
+    </div>
+
+    <div class="global-status normal" id="globalStatus">
+        <div>
+            <span id="globalStatusText" style="font-size: 18px; font-weight: bold;">✅ SISTEMA INTEGRAL</span>
+            <div id="lastEventTime" style="color: #666; font-size: 12px; margin-top: 5px;">Varredura de rede ativa...</div>
+        </div>
+        <div style="text-align: right">
+            <span style="font-size: 11px; color: #666; text-transform: uppercase;">Uptime</span><br>
+            <span id="uptime" class="stat-value" style="font-size: 18px">0s</span>
+        </div>
+    </div>
+
+    <div class="devices-grid">
+        <div class="device">
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #aaa; font-weight: bold; font-size: 13px;">TERMO-FORNO IND.</span>
+                <span id="device1Status" class="status-badge status-normal">ESTÁVEL</span>
+            </div>
+            <div class="sensor-reading">
+                <span id="temp1">200.0</span><span style="font-size: 16px; color: #666;">°C</span>
+            </div>
+            <div class="sensor-bar-container">
+                <div id="temp1Bar" class="sensor-bar-fill" style="background: var(--primary); width: 60%"></div>
+            </div>
+            <span style="font-size: 10px; color: #555">LIMITE: 230.0°C</span>
+        </div>
+
+        <div class="device">
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #aaa; font-weight: bold; font-size: 13px;">MOTOR DE INDUÇÃO</span>
+                <span id="device2Status" class="status-badge status-normal">ESTÁVEL</span>
+            </div>
+            <div class="sensor-reading">
+                <span id="vib2">0.50</span><span style="font-size: 16px; color: #666;">mm/s</span>
+            </div>
+            <div class="sensor-bar-container">
+                <div id="vib2Bar" class="sensor-bar-fill" style="background: var(--primary); width: 40%"></div>
+            </div>
+            <span style="font-size: 10px; color: #555">LIMITE: 1.20mm/s</span>
+        </div>
+
+        <div class="device">
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #aaa; font-weight: bold; font-size: 13px;">ESTEIRA LOGÍSTICA</span>
+                <span id="device3Status" class="status-badge status-normal">ESTÁVEL</span>
+            </div>
+            <div class="sensor-reading">
+                <span id="current3">15.0</span><span style="font-size: 16px; color: #666;">A</span>
+            </div>
+            <div class="sensor-bar-container">
+                <div id="current3Bar" class="sensor-bar-fill" style="background: var(--primary); width: 50%"></div>
+            </div>
+            <span style="font-size: 10px; color: #555">FAIXA SEGURA: 10-20A</span>
+        </div>
+    </div>
+
+    <div class="controls-panel">
+        <span style="color: var(--warning); font-size: 11px; font-weight: bold; text-transform: uppercase;">Simulador de Ataques Cibernéticos</span>
+        <div class="btn-group">
+            <button class="btn btn-attack" id="manualAttack1">Injetar Calor</button>
+            <button class="btn btn-attack" id="manualAttack2">Sabotar Eixo</button>
+            <button class="btn btn-attack" id="manualAttack3">Pico de Corrente</button>
+            <button class="btn btn-recover" id="manualRecoverAll" style="margin-left: auto">Purge & Hard Reset</button>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 25px;">
+        <div class="history-panel" id="historyList">
+            <div style="color: var(--primary)">[SYSTEM] Defesas ativas. Monitorando pacotes de rede...</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="stat-card">
+                <div style="font-size: 10px; color: #666; text-transform: uppercase;">Ataques Detectados</div>
+                <span class="stat-value" id="totalAttacks" style="color: var(--danger)">0</span>
+            </div>
+            <div class="stat-card">
+                <div style="font-size: 10px; color: #666; text-transform: uppercase;">Auto-Recuperações</div>
+                <span class="stat-value" id="autoRecovers">0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- CONFIGURAÇÃO DOS DISPOSITIVOS ---
+    // Aqui guardamos os valores ideais e os limites de segurança.
+    const devices = {
+        forno: { temperature: 200, targetTemp: 200, status: 'normal', limit: 230 },
+        motor: { vibration: 0.5, targetVib: 0.5, status: 'normal', limit: 1.2 },
+        esteira: { current: 15, targetCurrent: 15, status: 'normal', limitMin: 10, limitMax: 20 }
+    };
+
+    let attackActive = false;
+    let currentAttackType = null;
+    let totalAttacks = 0;
+    let totalRecovers = 0;
+    let history = [];
+    let startTime = Date.now();
+
+    // --- FUNÇÃO DE LOG ---
+    // Registra tudo o que acontece no console visual da tela.
+    function addToHistory(message, type, subtype = null) {
+        let time = new Date().toLocaleTimeString();
+        let color = type === 'attack' ? '#ff3e3e' : (type === 'recover' ? '#ffbe0b' : '#00ff9d');
+        history.unshift(`<div style="color: ${color}">[${time}] ${subtype ? '['+subtype.toUpperCase()+'] ' : ''}${message}</div>`);
+        if (history.length > 50) history.pop(); // Mantém apenas os últimos 50 eventos
+        document.getElementById('historyList').innerHTML = history.join('');
+    }
+
+    // --- MONITOR DE ANOMALIAS ---
+    // Esta função roda o tempo todo checando se alguém sabotou as máquinas.
+    function detectAnomalies() {
+        let anyAnomaly = false;
+        
+        // Validação do Forno
+        if (devices.forno.temperature > devices.forno.limit) {
+            anyAnomaly = true;
+            if (devices.forno.status !== 'alert') {
+                devices.forno.status = 'alert';
+                addToHistory(`ALERTA: Superaquecimento Detectado (${devices.forno.temperature.toFixed(1)}°C)`, 'attack', currentAttackType);
+            }
+        } else { devices.forno.status = 'normal'; }
+
+        // Validação do Motor
+        if (devices.motor.vibration > devices.motor.limit) {
+            anyAnomaly = true;
+            if (devices.motor.status !== 'alert') {
+                devices.motor.status = 'alert';
+                addToHistory(`ALERTA: Vibração Anômala detectada`, 'attack', currentAttackType);
+            }
+        } else { devices.motor.status = 'normal'; }
+
+        // Validação da Esteira
+        if (devices.esteira.current < devices.esteira.limitMin || devices.esteira.current > devices.esteira.limitMax) {
+            anyAnomaly = true;
+            if (devices.esteira.status !== 'alert') {
+                devices.esteira.status = 'alert';
+                addToHistory(`ALERTA: Flutuação de carga elétrica`, 'attack', currentAttackType);
+            }
+        } else { devices.esteira.status = 'normal'; }
+
+        // Lógica de contagem de ataques
+        if (anyAnomaly && !attackActive) {
+            attackActive = true;
+            totalAttacks++;
+            document.getElementById('totalAttacks').innerHTML = totalAttacks;
+        } else if (!anyAnomaly && attackActive) {
+            attackActive = false;
+            totalRecovers++;
+            document.getElementById('autoRecovers').innerHTML = totalRecovers;
+            addToHistory(`CONTRAMEDIDA: Malware isolado. Sistema restaurado.`, 'recover');
+        }
+    }
+
+    // --- IA DE RECUPERAÇÃO ---
+    // Simula o sistema voltando ao normal gradualmente (como se estivesse esfriando ou freando).
+    function autoRecover() {
+        devices.forno.temperature += (devices.forno.targetTemp - devices.forno.temperature) * 0.05;
+        devices.motor.vibration += (devices.motor.targetVib - devices.motor.vibration) * 0.05;
+        devices.esteira.current += (devices.esteira.targetCurrent - devices.esteira.current) * 0.05;
+    }
+
+    // --- ATUALIZAÇÃO DA TELA (UI) ---
+    // Pega os dados brutos e transforma em barras e textos bonitos.
+    function updateUI() {
+        // Forno UI
+        document.getElementById('temp1').innerHTML = devices.forno.temperature.toFixed(1);
+        document.getElementById('temp1Bar').style.width = Math.min(100, (devices.forno.temperature / 300) * 100) + '%';
+        document.getElementById('temp1Bar').style.backgroundColor = devices.forno.status === 'alert' ? 'var(--danger)' : 'var(--primary)';
+        document.getElementById('device1Status').className = 'status-badge ' + (devices.forno.status === 'alert' ? 'status-alert' : 'status-normal');
+        document.getElementById('device1Status').innerHTML = devices.forno.status === 'alert' ? 'CRÍTICO' : 'ESTÁVEL';
+
+        // Motor UI
+        document.getElementById('vib2').innerHTML = devices.motor.vibration.toFixed(2);
+        document.getElementById('vib2Bar').style.width = Math.min(100, (devices.motor.vibration / 2) * 100) + '%';
+        document.getElementById('vib2Bar').style.backgroundColor = devices.motor.status === 'alert' ? 'var(--danger)' : 'var(--primary)';
+        document.getElementById('device2Status').className = 'status-badge ' + (devices.motor.status === 'alert' ? 'status-alert' : 'status-normal');
+
+        // Esteira UI
+        document.getElementById('current3').innerHTML = devices.esteira.current.toFixed(1);
+        document.getElementById('current3Bar').style.width = Math.min(100, (devices.esteira.current / 30) * 100) + '%';
+        document.getElementById('current3Bar').style.backgroundColor = devices.esteira.status === 'alert' ? 'var(--danger)' : 'var(--primary)';
+        document.getElementById('device3Status').className = 'status-badge ' + (devices.esteira.status === 'alert' ? 'status-alert' : 'status-normal');
+
+        // Status Global
+        document.getElementById('globalStatus').className = 'global-status ' + (attackActive ? 'attack' : 'normal');
+        document.getElementById('globalStatusText').innerHTML = attackActive ? '⚠️ VIOLAÇÃO DE SEGURANÇA DETECTADA' : '✅ SISTEMA INTEGRAL';
+        document.getElementById('uptime').innerHTML = Math.floor((Date.now() - startTime) / 1000) + 's';
+    }
+
+    // --- INTERAÇÕES ---
+    document.getElementById('manualAttack1').onclick = () => { currentAttackType = 'manual'; devices.forno.temperature = 290; };
+    document.getElementById('manualAttack2').onclick = () => { currentAttackType = 'manual'; devices.motor.vibration = 1.8; };
+    document.getElementById('manualAttack3').onclick = () => { currentAttackType = 'manual'; devices.esteira.current = 35; };
+    
+    document.getElementById('manualRecoverAll').onclick = () => {
+        devices.forno.temperature = 200;
+        devices.motor.vibration = 0.5;
+        devices.esteira.current = 15;
+        addToHistory("RESET: Operador forçou a restauração dos parâmetros.", "recover", "manual");
+    };
+
+    // Loop infinito: roda tudo 10 vezes por segundo (100ms)
+    setInterval(() => {
+        autoRecover();
+        detectAnomalies();
+        updateUI();
+    }, 100);
+
+    // Invasor Automático: A cada 25 segundos, o "hacker" tenta entrar sozinho.
+    setInterval(() => {
+        if(!attackActive) {
+            currentAttackType = 'auto';
+            const r = Math.random();
+            if(r < 0.33) devices.forno.temperature = 285;
+            else if(r < 0.66) devices.motor.vibration = 1.9;
+            else devices.esteira.current = 40;
+        }
+    }, 25000);
+</script>
+</body>
+</html>
